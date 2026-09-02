@@ -10,7 +10,14 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.auth import LoginRateLimiter, create_access_token, decode_access_token, hash_password, verify_password
+from app.auth import (
+    DUMMY_PASSWORD_HASH,
+    LoginRateLimiter,
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 from app.config import Settings
 from app.discovery import ReaderDiscovery, validate_reader_ip
 from app.models import ApiUser, Reader
@@ -192,7 +199,10 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many login attempts")
 
         user = session.scalar(select(ApiUser).where(ApiUser.username == payload.username))
-        if user is None or not user.enabled or not verify_password(user.password_hash, payload.password):
+        user_enabled = user is not None and user.enabled
+        password_hash = user.password_hash if user_enabled else DUMMY_PASSWORD_HASH
+        password_valid = verify_password(password_hash, payload.password)
+        if not user_enabled or not password_valid:
             rate_limiter.record_failure(client_ip)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 

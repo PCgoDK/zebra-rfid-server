@@ -45,6 +45,9 @@ def hash_password(password: str) -> str:
     return password_hasher.hash(password)
 
 
+DUMMY_PASSWORD_HASH = hash_password("zebra-rfid-server-invalid-password")
+
+
 def verify_password(password_hash: str, password: str) -> bool:
     try:
         return password_hasher.verify(password_hash, password)

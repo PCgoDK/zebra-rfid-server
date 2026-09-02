@@ -6,8 +6,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.api as api_module
 from app.api import ReaderCreate, UserCreate, UserUpdate, create_api
-from app.auth import decode_access_token, hash_password
+from app.auth import DUMMY_PASSWORD_HASH, decode_access_token, hash_password
 from app.config import Settings
 from app.database import Base
 from app.models import ApiUser
@@ -62,6 +63,26 @@ def test_login_returns_a_token_only_for_valid_credentials() -> None:
         assert decode_access_token(response.access_token, TEST_SECRET)["username"] == "admin"
         with pytest.raises(HTTPException, match="Invalid username or password"):
             login(payload_type(username="admin", password="wrong"), request, session)
+
+
+def test_login_verifies_unknown_users_against_dummy_hash(monkeypatch) -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    login = get_route_endpoint(app, "/api/v1/auth/login")
+    verified_hashes = []
+
+    def verify_password(password_hash: str, password: str) -> bool:
+        verified_hashes.append(password_hash)
+        return False
+
+    monkeypatch.setattr(api_module, "verify_password", verify_password)
+    with session_factory() as session:
+        request = Request({"type": "http", "client": ("127.0.0.1", 12345)})
+        payload_type = login.__annotations__["payload"]
+        with pytest.raises(HTTPException, match="Invalid username or password"):
+            login(payload_type(username="missing", password="wrong"), request, session)
+
+    assert verified_hashes == [DUMMY_PASSWORD_HASH]
 
 
 def test_reader_creation_input_requires_a_safe_ipv4_address() -> None:
