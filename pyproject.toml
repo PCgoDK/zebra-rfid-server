@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zebra-rfid-server"
+version = "0.1.0"
+description = "RFID receiver service for Zebra readers"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic==1.14.0",
+    "fastapi==0.115.6",
+    "psycopg[binary]==3.2.3",
+    "pydantic-settings==2.7.0",
+    "SQLAlchemy==2.0.36",
+    "uvicorn==0.34.0",
+]
+
+[project.optional-dependencies]
+dev = ["httpx==0.28.1", "pytest==8.3.4"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
