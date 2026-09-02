@@ -62,10 +62,22 @@ Den aktuelle modtager forventer TCP-events som UTF-8, newline-afgraenset JSON:
 `gps_accuracy` og ISO 8601 `gps_timestamp`.
 
 FX7500, FX9600, FXR90 og ST5500 skal ikke konfigureres til denne JSON-strøm
-direkte endnu. Native LLRP/Zebra Event-konfiguration og parser implementeres
-først efter fangst og validering af events fra den konkrete laeser og firmware.
-Brug `tools/rfid_reader_simulator.py` til at verificere server, firewall og
-lagring indtil da.
+direkte. For native LLRP konfigureres readerens LLRP-tjeneste på port 5084 og
+readerens IP-adresse registreres i portalen. Sæt derefter den pågældende
+database-readers numeriske id i `LLRP_READER_IDS` i
+`/etc/zebra-rfid-server/server.env` og genstart tjenesten:
+
+```bash
+sudoedit /etc/zebra-rfid-server/server.env
+# Eksempel: LLRP_READER_IDS=1,3
+sudo systemctl restart zebra-rfid-server
+```
+
+For hver angivet reader opretter serveren en udgående LLRP-forbindelse til
+`reader.ip_address:LLRP_PORT` (standard 5084), modtager `RO_ACCESS_REPORT`,
+besvarer `KEEPALIVE` og genforbinder ved forbindelsestab. Valider altid den
+konkrete reader- og firmwarekonfiguration på fysisk hardware. Brug
+`tools/rfid_reader_simulator.py` til at verificere JSON TCP-modtageren.
 
 ## Konfiguration
 

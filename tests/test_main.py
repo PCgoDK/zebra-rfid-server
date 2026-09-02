@@ -63,7 +63,14 @@ def test_readme_describes_current_reader_event_contract() -> None:
 
     assert "Konfiguration af RFID-laeser" in readme
     assert "newline-afgraenset JSON" in readme
-    assert "Native LLRP/Zebra Event-konfiguration" in readme
+    assert "LLRP_READER_IDS" in readme
+    assert "RO_ACCESS_REPORT" in readme
+
+
+def test_llrp_reader_ids_are_validated() -> None:
+    assert Settings(llrp_reader_ids="1, 3").configured_llrp_reader_ids == [1, 3]
+    with pytest.raises(ValueError, match="LLRP_READER_IDS"):
+        _ = Settings(llrp_reader_ids="1,invalid").configured_llrp_reader_ids
 
 
 def test_login_returns_a_token_only_for_valid_credentials() -> None:

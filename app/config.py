@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     api_port: int = 8080
     tcp_host: str = "0.0.0.0"
     tcp_port: int = 5084
+    llrp_port: int = 5084
+    llrp_reader_ids: str = ""
     log_level: str = "INFO"
     jwt_secret: str = ""
     jwt_access_token_minutes: int = 30
@@ -30,3 +32,13 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.db_user}:{self.db_password}@"
             f"{self.db_host}:{self.db_port}/{self.db_name}"
         )
+
+    @property
+    def configured_llrp_reader_ids(self) -> list[int]:
+        try:
+            reader_ids = [int(reader_id) for reader_id in self.llrp_reader_ids.split(",") if reader_id.strip()]
+        except ValueError as error:
+            raise ValueError("LLRP_READER_IDS must contain comma-separated positive integer reader IDs") from error
+        if any(reader_id < 1 for reader_id in reader_ids):
+            raise ValueError("LLRP_READER_IDS must contain comma-separated positive integer reader IDs")
+        return reader_ids
