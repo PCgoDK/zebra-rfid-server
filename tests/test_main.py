@@ -53,7 +53,9 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert 'id="home"' in body
     assert 'id="swagger"' in body
     assert 'id="swagger-panel"' in body
+    assert 'id="swagger-frame"' in body
     assert 'src="/docs"' in body
+    assert 'preauthorizeApiKey("HTTPBearer", token)' in body
 
 
 def test_login_returns_a_token_only_for_valid_credentials() -> None:
