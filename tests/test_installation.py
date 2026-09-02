@@ -20,3 +20,10 @@ def test_github_bootstrap_clones_then_installs_to_opt() -> None:
     assert "https://github.com/PCgoDK/zebra-rfid-server.git" in bootstrap_script
     assert 'git clone --depth 1 --branch "$branch" "$repository_url" "$source_dir"' in bootstrap_script
     assert 'bash "$source_dir/install.sh"' in bootstrap_script
+
+
+def test_backup_grants_postgres_write_access_before_running_pg_dump() -> None:
+    backup_script = Path("backup.sh").read_text(encoding="utf-8")
+
+    assert 'install -d -m 0770 -o zebra-rfid-server -g postgres "$backup_dir"' in backup_script
+    assert 'sudo -u postgres pg_dump' in backup_script
