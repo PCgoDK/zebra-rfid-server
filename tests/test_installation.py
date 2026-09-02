@@ -18,6 +18,7 @@ def test_github_bootstrap_clones_then_installs_to_opt() -> None:
     bootstrap_script = Path("install-from-github.sh").read_text(encoding="utf-8")
 
     assert "https://github.com/PCgoDK/zebra-rfid-server.git" in bootstrap_script
+    assert 'sudo -H -u "$SUDO_USER" env -u GIT_ASKPASS -u SSH_ASKPASS GIT_TERMINAL_PROMPT=0' in bootstrap_script
     assert 'git clone --depth 1 --branch "$branch" "$repository_url" "$source_dir"' in bootstrap_script
     assert 'bash "$source_dir/install.sh"' in bootstrap_script
 
