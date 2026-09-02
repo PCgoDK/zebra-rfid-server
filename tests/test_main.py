@@ -67,6 +67,15 @@ def test_readme_describes_current_reader_event_contract() -> None:
     assert "RO_ACCESS_REPORT" in readme
 
 
+def test_readme_describes_total_reset_of_data_and_credentials() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "## Total nulstilling" in readme
+    assert "dropdb --if-exists zebra_rfid_server" in readme
+    assert "dropuser --if-exists zebra_rfid_server" in readme
+    assert "rm -rf /etc/zebra-rfid-server /var/lib/zebra-rfid-server /var/log/zebra-rfid-server" in readme
+
+
 def test_llrp_reader_ids_are_validated() -> None:
     assert Settings(llrp_reader_ids="1, 3").configured_llrp_reader_ids == [1, 3]
     with pytest.raises(ValueError, match="LLRP_READER_IDS"):

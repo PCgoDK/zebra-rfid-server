@@ -133,3 +133,28 @@ PostgreSQL-databasen, konfiguration, logs og modtagne data:
 ```bash
 sudo bash uninstall.sh
 ```
+
+## Total nulstilling
+
+Følgende fjerner permanent program, konfiguration, RFID-data, backups,
+PostgreSQL-database, databasebruger og Linux-servicebruger. Tag først en backup
+med `sudo bash backup.sh`, hvis data skal kunne gendannes.
+
+```bash
+sudo bash uninstall.sh
+sudo rm -rf /etc/zebra-rfid-server /var/lib/zebra-rfid-server /var/log/zebra-rfid-server
+sudo -u postgres dropdb --if-exists zebra_rfid_server
+sudo -u postgres dropuser --if-exists zebra_rfid_server
+sudo userdel zebra-rfid-server 2>/dev/null || true
+sudo groupdel zebra-rfid-server 2>/dev/null || true
+```
+
+Fjern kun følgende UFW-regler, hvis portene ikke anvendes af andre tjenester:
+
+```bash
+sudo ufw delete allow 8080/tcp
+sudo ufw delete allow 5084/tcp
+```
+
+Installer derefter fra GitHub igen. Da `server.env` er væk, spørger
+installationen efter en ny administratoradgangskode.
