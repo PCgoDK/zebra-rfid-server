@@ -87,6 +87,37 @@ Kopier `.env.example` til den fremtidige produktionsplacering
 
 ## Linux drift
 
+### Hurtig installation
+
+1. Log ind på en Ubuntu/Debian-server med internetadgang og en bruger med
+	`sudo`-rettigheder.
+
+2. Hent den aktuelle `main`-kilde fra GitHub:
+
+	```bash
+	source_dir=$(mktemp -d)
+	curl -fsSL https://github.com/PCgoDK/zebra-rfid-server/archive/refs/heads/main.tar.gz | tar -xz -C "$source_dir" --strip-components=1
+	```
+
+3. Start installationen. Indtast sudo-adgangskoden og vælg derefter en ny
+	administratoradgangskode på mindst 12 tegn, når du bliver spurgt:
+
+	```bash
+	sudo bash "$source_dir/install.sh"
+	rm -rf "$source_dir"
+	```
+
+4. Kontroller at tjenesten og API'et kører:
+
+	```bash
+	sudo systemctl status zebra-rfid-server
+	curl http://127.0.0.1:8080/api/v1/health
+	```
+
+5. Åbn `http://server-ip:8080` i browseren, log ind som `admin`, og fjern
+	derefter den midlertidige klartekst-adgangskode som beskrevet under
+	[Administratoradgangskode](#administratoradgangskode).
+
 Installer direkte fra GitHub til `/opt/zebra-rfid-server`:
 
 ```bash

@@ -84,6 +84,17 @@ def test_readme_describes_github_archive_installation() -> None:
     assert 'sudo bash "$source_dir/install.sh"' in readme
 
 
+def test_readme_includes_step_by_step_installation_guide() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "### Hurtig installation" in readme
+    assert "1. Log ind på en Ubuntu/Debian-server" in readme
+    assert "2. Hent den aktuelle `main`-kilde fra GitHub" in readme
+    assert "3. Start installationen" in readme
+    assert "4. Kontroller at tjenesten og API'et kører" in readme
+    assert "5. Åbn `http://server-ip:8080`" in readme
+
+
 def test_readme_documents_removal_of_admin_password_cleartext() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
