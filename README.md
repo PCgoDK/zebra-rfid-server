@@ -91,14 +91,16 @@ Installer direkte fra GitHub til `/opt/zebra-rfid-server`:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/PCgoDK/zebra-rfid-server/main/install-from-github.sh
-sudo env INITIAL_ADMIN_PASSWORD='vaelg-en-lang-adgangskode' bash install-from-github.sh
+sudo bash install-from-github.sh
 ```
 
 Installationen henter `main` fra GitHub, installerer programmet i
 `/opt/zebra-rfid-server` og opretter UFW-regler for `8080/tcp` (web/API) og
 `5084/tcp` (RFID-input). Scriptet aktiverer ikke UFW automatisk. Hvis UFW
 allerede er aktiv, gælder reglerne straks; ellers aktiveres den bevidst af
-driftsansvarlig efter SSH-adgang er verificeret.
+driftsansvarlig efter SSH-adgang er verificeret. En ny interaktiv installation
+spørger efter administratoradgangskoden og kræver mindst 12 tegn. For en
+ikke-interaktiv installation angives den som `INITIAL_ADMIN_PASSWORD`.
 
 Installer eller opgrader fra en komplet lokal kildekopi:
 

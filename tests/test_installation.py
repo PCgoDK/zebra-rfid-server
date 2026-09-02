@@ -14,6 +14,14 @@ def test_installation_opens_api_and_reader_input_firewall_ports() -> None:
     assert "ufw allow 5084/tcp" in install_script
 
 
+def test_new_interactive_installation_prompts_for_admin_password() -> None:
+    install_script = Path("install.sh").read_text(encoding="utf-8")
+
+    assert 'read -r -s -p "Initial administrator password: " requested_admin_password' in install_script
+    assert 'read -r -s -p "Confirm administrator password: " confirmed_admin_password' in install_script
+    assert "INITIAL_ADMIN_PASSWORD must be set for a non-interactive installation" in install_script
+
+
 def test_github_bootstrap_clones_then_installs_to_opt() -> None:
     bootstrap_script = Path("install-from-github.sh").read_text(encoding="utf-8")
 

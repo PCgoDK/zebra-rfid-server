@@ -9,6 +9,24 @@ data_dir=/var/lib/zebra-rfid-server
 log_dir=/var/log/zebra-rfid-server
 service_user=zebra-rfid-server
 requested_admin_password=${INITIAL_ADMIN_PASSWORD:-}
+if [[ -z "$requested_admin_password" && ! -f "$config_dir/server.env" ]]; then
+  [[ -t 0 ]] || { echo "INITIAL_ADMIN_PASSWORD must be set for a non-interactive installation"; exit 1; }
+  while true; do
+    read -r -s -p "Initial administrator password: " requested_admin_password
+    printf "\n"
+    read -r -s -p "Confirm administrator password: " confirmed_admin_password
+    printf "\n"
+    [[ "$requested_admin_password" == "$confirmed_admin_password" ]] || {
+      echo "Administrator passwords do not match"
+      continue
+    }
+    [[ ${#requested_admin_password} -ge 12 ]] || {
+      echo "Administrator password must contain at least 12 characters"
+      continue
+    }
+    break
+  done
+fi
 if [[ -n "$requested_admin_password" && ${#requested_admin_password} -lt 12 ]]; then
   echo "INITIAL_ADMIN_PASSWORD must contain at least 12 characters"
   exit 1
