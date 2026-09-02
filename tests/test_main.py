@@ -84,6 +84,15 @@ def test_readme_describes_github_archive_installation() -> None:
     assert 'sudo bash "$source_dir/install.sh"' in readme
 
 
+def test_readme_documents_removal_of_admin_password_cleartext() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "### Administratoradgangskode" in readme
+    assert "INITIAL_ADMIN_PASSWORD" in readme
+    assert "klartekst" in readme
+    assert "sudo sed -i '/^INITIAL_ADMIN_PASSWORD=/d' /etc/zebra-rfid-server/server.env" in readme
+
+
 def test_llrp_reader_ids_are_validated() -> None:
     assert Settings(llrp_reader_ids="1, 3").configured_llrp_reader_ids == [1, 3]
     with pytest.raises(ValueError, match="LLRP_READER_IDS"):

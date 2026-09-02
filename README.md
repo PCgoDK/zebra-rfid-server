@@ -106,6 +106,22 @@ efter SSH-adgang er verificeret. En ny interaktiv installation spørger efter
 administratoradgangskoden og kræver mindst 12 tegn. For en ikke-interaktiv
 installation angives den som `INITIAL_ADMIN_PASSWORD`.
 
+### Administratoradgangskode
+
+Ved første installation gemmes den indtastede administratoradgangskode
+midlertidigt som klartekst i
+`/etc/zebra-rfid-server/server.env` under `INITIAL_ADMIN_PASSWORD`. Efter
+første vellykkede login skal klartekstværdien fjernes:
+
+```bash
+sudo sed -i '/^INITIAL_ADMIN_PASSWORD=/d' /etc/zebra-rfid-server/server.env
+```
+
+Administratorens adgangskode er allerede gemt som en Argon2-hash i
+PostgreSQL-tabellen `api_users`; fjernelse af klartekstværdien påvirker ikke
+login. Angiv kun `INITIAL_ADMIN_PASSWORD` igen, hvis administratoradgangskoden
+bevidst skal nulstilles under en opgradering.
+
 Installer eller opgrader fra en komplet lokal kildekopi:
 
 ```bash
