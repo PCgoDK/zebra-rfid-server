@@ -43,6 +43,30 @@ tilgængelig fra en fysisk laeser.
 
 Yderligere dokumentation findes i `docs/`.
 
+## Konfiguration af RFID-laeser
+
+Serveren lytter paa `TCP_HOST:TCP_PORT` (som standard `0.0.0.0:5084`). Giv
+laeseren en fast IPv4-adresse og tillad TCP-trafik fra laeserens netvaerk til
+serverens port 5084. Opret derefter laeseren manuelt i portalen med dens
+IP-adresse, model og serienummer, eller brug `POST /api/v1/readers`.
+
+Den aktuelle modtager forventer TCP-events som UTF-8, newline-afgraenset JSON:
+
+```json
+{"reader_id":1,"epc_hex":"31D55BE6800002156C000000","antenna":1,"rssi":-45.2,"phase":12.5,"channel":1}
+```
+
+`reader_id` og `epc_hex` er paakraevet. `antenna`, `rssi`, `phase` og
+`channel` er valgfrie. ST5500 kan desuden sende `direction`, `zone` og
+`location`; FXR90 kan sende `gps_latitude`, `gps_longitude`, `gps_altitude`,
+`gps_accuracy` og ISO 8601 `gps_timestamp`.
+
+FX7500, FX9600, FXR90 og ST5500 skal ikke konfigureres til denne JSON-strøm
+direkte endnu. Native LLRP/Zebra Event-konfiguration og parser implementeres
+først efter fangst og validering af events fra den konkrete laeser og firmware.
+Brug `tools/rfid_reader_simulator.py` til at verificere server, firewall og
+lagring indtil da.
+
 ## Konfiguration
 
 Kopier `.env.example` til den fremtidige produktionsplacering

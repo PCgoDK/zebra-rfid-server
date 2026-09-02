@@ -58,6 +58,14 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert 'preauthorizeApiKey("HTTPBearer", token)' in body
 
 
+def test_readme_describes_current_reader_event_contract() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "Konfiguration af RFID-laeser" in readme
+    assert "newline-afgraenset JSON" in readme
+    assert "Native LLRP/Zebra Event-konfiguration" in readme
+
+
 def test_login_returns_a_token_only_for_valid_credentials() -> None:
     session_factory = create_test_session_factory()
     app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
