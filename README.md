@@ -1,7 +1,7 @@
 # zebra-rfid-server
 
 Produktionsklar Linux-tjeneste til at modtage RFID-data fra Zebra FX7500- og
-FX9600-laesere, gemme dem i PostgreSQL og senere eksponere dem via REST API og
+FX9600-laesere, gemme dem i PostgreSQL samt eksponere REST API og
 administrationsportal.
 
 ## Udvikling
@@ -15,10 +15,8 @@ pip install -r requirements.txt
 pytest
 ```
 
-Fase 1 leverer datamodellen, Alembic-migrationsskelet og EPC-normalisering.
-Fase 2 leverer en asyncio TCP-modtager, dubletaggregering og simulator med et
-midlertidigt newline-afgraenset JSON-format. Zebra-parser, discovery, API og
-webinterface implementeres i de efterfoelgende faser.
+Systemet har Alembic-migrationer, EPC-normalisering, asyncio TCP-modtager,
+dubletaggregering, REST API, tokenbaseret adgangskontrol og webportal.
 
 Start TCP-modtageren under udvikling:
 
@@ -33,15 +31,17 @@ Statussiden findes derefter paa `http://localhost:8080`, og health check er
 Send fragmenterede testevents fra to simulerede laesere:
 
 ```bash
-python tools/rfid_reader_simulator.py --readers 2 --events 10 --fragment
+python tools/rfid_reader_simulator.py --readers 2 --events 10 --fragment --duplicates 1 --disconnect-every 5
 ```
 
 ## Reader discovery
 
-Fase 3 understøtter read-only LLRP-kontroller paa port 5084 og valideret manuel
+Discovery understøtter read-only LLRP-kontroller paa port 5084 og valideret manuel
 IPv4-adresse. En fundet LLRP-port markeres `connected_without_data`; model,
 firmware og serienummer udfyldes først, naar den verificerede Zebra-protokol er
 tilgængelig fra en fysisk laeser.
+
+Yderligere dokumentation findes i `docs/`.
 
 ## Konfiguration
 

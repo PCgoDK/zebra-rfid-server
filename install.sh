@@ -31,7 +31,7 @@ install -m 0644 alembic.ini "$app_dir/alembic.ini"
 python3 -m venv "$app_dir/.venv"
 "$app_dir/.venv/bin/pip" install --upgrade pip
 "$app_dir/.venv/bin/pip" install -r "$app_dir/requirements.txt"
-install -d -m 0750 "$config_dir"
+install -d -m 0750 -o root -g "$service_user" "$config_dir"
 if [[ ! -f "$config_dir/server.env" ]]; then
   install -m 0640 .env.example "$config_dir/server.env"
   db_password=$(openssl rand -hex 32)
