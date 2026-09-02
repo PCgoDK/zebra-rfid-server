@@ -15,7 +15,9 @@ if [[ -n "$requested_admin_password" && ${#requested_admin_password} -lt 12 ]]; 
 fi
 
 apt-get update
-apt-get install -y python3-venv python3-pip postgresql
+apt-get install -y python3-venv python3-pip postgresql ufw
+ufw allow 8080/tcp comment 'Zebra RFID Server API'
+ufw allow 5084/tcp comment 'Zebra RFID reader input'
 id "$service_user" &>/dev/null || useradd --system --home-dir "$data_dir" --create-home --shell /usr/sbin/nologin "$service_user"
 install -d -o "$service_user" -g "$service_user" "$app_dir" "$data_dir" "$log_dir"
 install -d -o "$service_user" -g "$service_user" "$app_dir/app"
