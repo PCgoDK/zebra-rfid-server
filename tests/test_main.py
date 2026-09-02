@@ -50,6 +50,9 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert "Åbn læser" in body
     assert "FXR90" in body
     assert "ST5500" in body
+    assert 'id="home"' in body
+    assert 'id="swagger"' in body
+    assert 'href="/docs"' in body
 
 
 def test_login_returns_a_token_only_for_valid_credentials() -> None:
