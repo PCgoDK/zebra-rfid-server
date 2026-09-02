@@ -1,0 +1,71 @@
+from datetime import timedelta
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.epc import parse_epc
+from app.models import Reader, TagRead
+from app.rfid import AggregatedTagRead
+
+
+class TagReadRepository:
+    def __init__(self, session_factory: sessionmaker[Session], duplicate_window_ms: int) -> None:
+        self.session_factory = session_factory
+        self.duplicate_window = timedelta(milliseconds=duplicate_window_ms)
+
+    def save(self, aggregated: AggregatedTagRead) -> TagRead:
+        event = aggregated.event
+        epc = parse_epc(event.epc_hex)
+        with self.session_factory() as session:
+            reader = session.get(Reader, event.reader_id)
+            if reader is None:
+                raise ValueError(f"Reader {event.reader_id} is not registered")
+
+            reader.last_seen_at = aggregated.last_seen_at
+            reader.last_data_at = aggregated.last_seen_at
+            reader.status = "receiving_data"
+            existing = session.scalar(
+                select(TagRead)
+                .where(
+                    TagRead.reader_id == event.reader_id,
+                    TagRead.epc_hex == epc.hex_value,
+                    TagRead.antenna == event.antenna,
+                    TagRead.last_seen_at >= aggregated.last_seen_at - self.duplicate_window,
+                )
+                .order_by(TagRead.last_seen_at.desc())
+                .limit(1)
+            )
+            if existing is not None:
+                existing.last_seen_at = aggregated.last_seen_at
+                existing.seen_count += 1
+                existing.rssi = event.rssi
+                existing.phase = event.phase
+                existing.channel = event.channel
+                existing.reader_timestamp = event.reader_timestamp
+                existing.raw_payload = event.raw_payload
+                existing.extra_data = event.extra_data
+                tag_read = existing
+            else:
+                tag_read = TagRead(
+                    reader_id=event.reader_id,
+                    reader_ip=event.reader_ip,
+                    epc_hex=epc.hex_value,
+                    epc_decimal=epc.decimal_value,
+                    epc_bit_length=epc.bit_length,
+                    antenna=event.antenna,
+                    rssi=event.rssi,
+                    phase=event.phase,
+                    channel=event.channel,
+                    reader_timestamp=event.reader_timestamp,
+                    received_at=aggregated.last_seen_at,
+                    first_seen_at=aggregated.first_seen_at,
+                    last_seen_at=aggregated.last_seen_at,
+                    seen_count=aggregated.seen_count,
+                    raw_payload=event.raw_payload,
+                    extra_data=event.extra_data,
+                    parse_status="valid",
+                )
+                session.add(tag_read)
+            session.commit()
+            session.refresh(tag_read)
+            return tag_read

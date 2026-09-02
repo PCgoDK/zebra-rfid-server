@@ -1,0 +1,22 @@
+[Unit]
+Description=Zebra RFID Server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zebra-rfid-server
+Group=zebra-rfid-server
+WorkingDirectory=/opt/zebra-rfid-server
+EnvironmentFile=/etc/zebra-rfid-server/server.env
+ExecStart=/opt/zebra-rfid-server/.venv/bin/python -m app.main
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zebra-rfid-server /var/log/zebra-rfid-server
+
+[Install]
+WantedBy=multi-user.target

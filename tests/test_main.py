@@ -1,0 +1,133 @@
+from fastapi import HTTPException
+from pathlib import Path
+import pytest
+from starlette.requests import Request
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.api import ReaderCreate, UserCreate, UserUpdate, create_api
+from app.auth import decode_access_token, hash_password
+from app.config import Settings
+from app.database import Base
+from app.models import ApiUser
+
+TEST_SECRET = "a-secure-test-secret-with-at-least-32-bytes"
+
+
+def create_test_session_factory() -> sessionmaker:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)
+
+
+def get_route_endpoint(app, path: str):
+    return next(route.endpoint for route in app.routes if route.path == path)
+
+
+def test_health_endpoint_reports_service_status() -> None:
+    app = create_api(Settings(jwt_secret=TEST_SECRET), create_test_session_factory())
+    endpoint = get_route_endpoint(app, "/api/v1/health")
+    response = endpoint()
+
+    assert response == {"status": "ok"}
+
+
+def test_dashboard_renders_login_and_reader_controls() -> None:
+    app = create_api(Settings(jwt_secret=TEST_SECRET), create_test_session_factory())
+    dashboard = get_route_endpoint(app, "/")
+    response = dashboard(Request({"type": "http", "method": "GET", "path": "/", "headers": []}))
+
+    body = response.body.decode()
+    assert "Log ind" in body
+    assert "Reader dashboard" in body
+    assert "Åbn læser" in body
+
+
+def test_login_returns_a_token_only_for_valid_credentials() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    login = get_route_endpoint(app, "/api/v1/auth/login")
+    with session_factory() as session:
+        session.add(ApiUser(username="admin", password_hash=hash_password("password")))
+        session.commit()
+        request = Request({"type": "http", "client": ("127.0.0.1", 12345)})
+        payload_type = login.__annotations__["payload"]
+        response = login(payload_type(username="admin", password="password"), request, session)
+
+        assert decode_access_token(response.access_token, TEST_SECRET)["username"] == "admin"
+        with pytest.raises(HTTPException, match="Invalid username or password"):
+            login(payload_type(username="admin", password="wrong"), request, session)
+
+
+def test_reader_creation_input_requires_a_safe_ipv4_address() -> None:
+    assert ReaderCreate(name="Dock 1", ip_address="192.168.1.20").ip_address == "192.168.1.20"
+    with pytest.raises(ValueError):
+        ReaderCreate(name="Bad reader", ip_address="::1")
+
+
+def test_reader_creation_accepts_optional_identification_details() -> None:
+    reader = ReaderCreate(
+        name="Dock 1",
+        ip_address="192.168.1.20",
+        serial_number="FX9600-123",
+        mac_address="00:11:22:33:44:55",
+        firmware_version="3.0.0",
+    )
+
+    assert reader.mac_address == "00:11:22:33:44:55"
+    with pytest.raises(ValueError):
+        ReaderCreate(name="Dock 1", ip_address="192.168.1.20", mac_address="invalid")
+
+
+def test_user_update_requires_a_change_and_a_long_new_password() -> None:
+    assert UserUpdate(current_password="current", username="new-admin").has_changes() is True
+    assert UserUpdate(current_password="current").has_changes() is False
+    with pytest.raises(ValueError):
+        UserUpdate(current_password="current", new_password="too-short")
+
+
+def test_admin_username_is_not_editable_in_portal_template() -> None:
+    template = (Path("app/templates/dashboard.html")).read_text(encoding="utf-8")
+
+    assert 'id="new-username"' not in template
+    assert "Brugernavnet admin er fast" in template
+
+
+def test_portal_exposes_administrator_api_user_creation() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+
+    assert "Opret API-bruger" in template
+    assert 'id="api-password"' in template
+    assert 'value="api_client"' in template
+
+
+def test_user_creation_requires_a_valid_role_and_long_password() -> None:
+    assert UserCreate(username="reader", password="long-enough-password", role="read_only").role == "read_only"
+    with pytest.raises(ValueError):
+        UserCreate(username="reader", password="too-short", role="owner")
+
+
+def test_required_reader_and_tag_read_routes_are_registered() -> None:
+    app = create_api(Settings(jwt_secret=TEST_SECRET), create_test_session_factory())
+    routes = {(route.path, method) for route in app.routes for method in route.methods}
+
+    assert {
+        ("/api/v1/readers", "GET"),
+        ("/api/v1/readers", "POST"),
+        ("/api/v1/readers/{reader_id}", "GET"),
+        ("/api/v1/readers/{reader_id}", "PATCH"),
+        ("/api/v1/readers/discover", "POST"),
+        ("/api/v1/auth/me", "PATCH"),
+        ("/api/v1/users", "POST"),
+        ("/api/v1/users", "GET"),
+        ("/api/v1/users/{user_id}", "DELETE"),
+        ("/api/v1/tag-reads", "GET"),
+        ("/api/v1/tag-reads", "POST"),
+        ("/api/v1/tag-reads/latest", "GET"),
+        ("/api/v1/tag-reads/{tag_read_id}", "GET"),
+    }.issubset(routes)
