@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.api as api_module
-from app.api import ReaderCreate, UserCreate, UserUpdate, create_api
+from app.api import ReaderCreate, TagReadCreate, TagReadResponse, UserCreate, UserUpdate, create_api
 from app.auth import DUMMY_PASSWORD_HASH, decode_access_token, hash_password
 from app.config import Settings
 from app.database import Base
@@ -48,6 +48,8 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert "Log ind" in body
     assert "Reader dashboard" in body
     assert "Åbn læser" in body
+    assert "FXR90" in body
+    assert "ST5500" in body
 
 
 def test_login_returns_a_token_only_for_valid_credentials() -> None:
@@ -138,6 +140,39 @@ def test_reader_list_includes_received_tag_read_count() -> None:
         readers = list_readers(offset=0, limit=100, session=session)
 
     assert readers[0].tag_read_count == 1
+
+
+def test_tag_read_schemas_support_optional_st5500_fields() -> None:
+    payload = TagReadCreate(
+        reader_id=1,
+        epc_hex="00AA",
+        direction="inbound",
+        zone="dock-1",
+        location="north",
+    )
+    tag_read = TagRead(
+        id=1,
+        reader_id=1,
+        reader_ip="192.0.2.10",
+        epc_hex="00AA",
+        epc_decimal="170",
+        epc_bit_length=16,
+        antenna=1,
+        rssi=-42,
+        received_at=datetime.now(timezone.utc),
+        first_seen_at=datetime.now(timezone.utc),
+        last_seen_at=datetime.now(timezone.utc),
+        seen_count=1,
+        raw_payload="{}",
+        parse_status="valid",
+    )
+
+    assert payload.direction == "inbound"
+    assert payload.zone == "dock-1"
+    assert payload.location == "north"
+    assert TagReadResponse.model_validate(tag_read).direction is None
+    assert TagReadResponse.model_validate(tag_read).zone is None
+    assert TagReadResponse.model_validate(tag_read).location is None
 
 
 def test_user_update_requires_a_change_and_a_long_new_password() -> None:

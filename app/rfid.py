@@ -15,6 +15,9 @@ class TagEvent:
     rssi: float | None = None
     phase: float | None = None
     channel: int | None = None
+    direction: str | None = None
+    zone: str | None = None
+    location: str | None = None
     reader_timestamp: datetime | None = None
     raw_payload: str = ""
     extra_data: dict[str, Any] | None = None
@@ -42,7 +45,9 @@ def parse_simulator_event(payload: str, reader_ip: str) -> TagEvent:
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError("Payload requires reader_id and hexadecimal epc_hex") from error
 
-    known_fields = {"reader_id", "epc_hex", "antenna", "rssi", "phase", "channel"}
+    known_fields = {
+        "reader_id", "epc_hex", "antenna", "rssi", "phase", "channel", "direction", "zone", "location"
+    }
     return TagEvent(
         reader_id=reader_id,
         epc_hex=epc.hex_value,
@@ -51,6 +56,9 @@ def parse_simulator_event(payload: str, reader_ip: str) -> TagEvent:
         rssi=float(data["rssi"]) if data.get("rssi") is not None else None,
         phase=float(data["phase"]) if data.get("phase") is not None else None,
         channel=int(data["channel"]) if data.get("channel") is not None else None,
+        direction=str(data["direction"]) if data.get("direction") is not None else None,
+        zone=str(data["zone"]) if data.get("zone") is not None else None,
+        location=str(data["location"]) if data.get("location") is not None else None,
         raw_payload=payload,
         extra_data={key: value for key, value in data.items() if key not in known_fields} or None,
     )

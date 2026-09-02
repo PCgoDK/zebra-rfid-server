@@ -20,6 +20,18 @@ def test_parser_accepts_the_simulator_96_bit_epc_shape() -> None:
     assert len(event.epc_hex) == 24
 
 
+def test_parser_extracts_optional_st5500_fields() -> None:
+    event = parse_simulator_event(
+        '{"reader_id": 4, "epc_hex": "00aa", "antenna": 2, "direction": "inbound", "zone": "dock-1", "location": "north"}',
+        "10.0.0.2",
+    )
+
+    assert event.direction == "inbound"
+    assert event.zone == "dock-1"
+    assert event.location == "north"
+    assert event.extra_data is None
+
+
 def test_duplicate_aggregator_updates_existing_read_inside_window() -> None:
     aggregator = DuplicateAggregator(window_ms=1000)
     event = TagEvent(1, "00AA", 2, "10.0.0.2", rssi=-50)

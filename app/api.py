@@ -128,6 +128,9 @@ class TagReadCreate(BaseModel):
     epc_hex: str
     antenna: int | None = Field(default=None, ge=0)
     rssi: float | None = None
+    direction: str | None = Field(default=None, max_length=64)
+    zone: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
     raw_payload: str = ""
 
     @field_validator("epc_hex")
@@ -147,6 +150,9 @@ class TagReadResponse(BaseModel):
     epc_bit_length: int
     antenna: int | None
     rssi: float | None
+    direction: str | None
+    zone: str | None
+    location: str | None
     received_at: datetime
     seen_count: int
 
@@ -399,6 +405,9 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
             epc_bit_length=epc.bit_length,
             antenna=payload.antenna,
             rssi=payload.rssi,
+            direction=payload.direction,
+            zone=payload.zone,
+            location=payload.location,
             raw_payload=payload.raw_payload,
         )
         session.add(tag_read)

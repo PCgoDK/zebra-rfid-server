@@ -41,6 +41,9 @@ class TagReadRepository:
                 existing.rssi = event.rssi
                 existing.phase = event.phase
                 existing.channel = event.channel
+                existing.direction = event.direction
+                existing.zone = event.zone
+                existing.location = event.location
                 existing.reader_timestamp = event.reader_timestamp
                 existing.raw_payload = event.raw_payload
                 existing.extra_data = event.extra_data
@@ -56,6 +59,9 @@ class TagReadRepository:
                     rssi=event.rssi,
                     phase=event.phase,
                     channel=event.channel,
+                    direction=event.direction,
+                    zone=event.zone,
+                    location=event.location,
                     reader_timestamp=event.reader_timestamp,
                     received_at=aggregated.last_seen_at,
                     first_seen_at=aggregated.first_seen_at,
