@@ -67,6 +67,15 @@ def test_readme_describes_current_reader_event_contract() -> None:
     assert "RO_ACCESS_REPORT" in readme
 
 
+def test_readme_describes_fx9600_llrp_configuration() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "### Zebra FX9600" in readme
+    assert "LLRP_READER_IDS=1" in readme
+    assert "RO_ACCESS_REPORT" in readme
+    assert "journalctl -u zebra-rfid-server -f" in readme
+
+
 def test_readme_describes_total_reset_of_data_and_credentials() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 

@@ -79,6 +79,38 @@ besvarer `KEEPALIVE` og genforbinder ved forbindelsestab. Valider altid den
 konkrete reader- og firmwarekonfiguration på fysisk hardware. Brug
 `tools/rfid_reader_simulator.py` til at verificere JSON TCP-modtageren.
 
+### Zebra FX9600
+
+1. Giv FX9600 en fast IPv4-adresse på samme netværk som serveren, og åbn
+	readerens webinterface på `http://<reader-ip>`.
+
+2. I readerens RFID-/LLRP-konfiguration aktiveres LLRP, inventory/ROSpec og
+	`RO_ACCESS_REPORT` på TCP-port 5084. Vælg de antenneporte og RFID-region,
+	der passer til installationen. Gem og anvend konfigurationen. De præcise
+	menunavne afhænger af firmwareversionen.
+
+3. Opret readeren i Zebra RFID Server-portalen med model `FX9600`, dens
+	IP-adresse og de kendte identifikationsoplysninger. Noter readerens
+	numeriske id fra `GET /api/v1/readers` eller Swagger.
+
+4. Tilføj id'et til `/etc/zebra-rfid-server/server.env` og genstart:
+
+	```bash
+	sudoedit /etc/zebra-rfid-server/server.env
+	# Eksempel: LLRP_READER_IDS=1
+	sudo systemctl restart zebra-rfid-server
+	```
+
+5. Bekræft forbindelse og tag-reads med:
+
+	```bash
+	sudo journalctl -u zebra-rfid-server -f
+	```
+
+Hvis FX9600 ikke sender reads, kontroller LLRP-port, netværksadgang mellem
+server og reader, valgt RFID-region, aktive antenner og inventory/ROSpec i
+readerens webinterface.
+
 ## Konfiguration
 
 Kopier `.env.example` til den fremtidige produktionsplacering
