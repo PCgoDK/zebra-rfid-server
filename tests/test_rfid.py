@@ -32,6 +32,20 @@ def test_parser_extracts_optional_st5500_fields() -> None:
     assert event.extra_data is None
 
 
+def test_parser_extracts_optional_fxr90_gps_fields() -> None:
+    event = parse_simulator_event(
+        '{"reader_id": 4, "epc_hex": "00aa", "gps_latitude": 55.6761, "gps_longitude": 12.5683, "gps_altitude": 14.5, "gps_accuracy": 3.2, "gps_timestamp": "2026-09-02T12:00:00Z"}',
+        "10.0.0.2",
+    )
+
+    assert event.gps_latitude == 55.6761
+    assert event.gps_longitude == 12.5683
+    assert event.gps_altitude == 14.5
+    assert event.gps_accuracy == 3.2
+    assert event.gps_timestamp.isoformat() == "2026-09-02T12:00:00+00:00"
+    assert event.extra_data is None
+
+
 def test_duplicate_aggregator_updates_existing_read_inside_window() -> None:
     aggregator = DuplicateAggregator(window_ms=1000)
     event = TagEvent(1, "00AA", 2, "10.0.0.2", rssi=-50)

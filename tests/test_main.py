@@ -175,6 +175,24 @@ def test_tag_read_schemas_support_optional_st5500_fields() -> None:
     assert TagReadResponse.model_validate(tag_read).location is None
 
 
+def test_tag_read_schemas_support_optional_fxr90_gps_fields() -> None:
+    payload = TagReadCreate(
+        reader_id=1,
+        epc_hex="00AA",
+        gps_latitude=55.6761,
+        gps_longitude=12.5683,
+        gps_altitude=14.5,
+        gps_accuracy=3.2,
+        gps_timestamp="2026-09-02T12:00:00Z",
+    )
+
+    assert payload.gps_latitude == 55.6761
+    assert payload.gps_longitude == 12.5683
+    assert payload.gps_timestamp.isoformat() == "2026-09-02T12:00:00+00:00"
+    with pytest.raises(ValueError):
+        TagReadCreate(reader_id=1, epc_hex="00AA", gps_latitude=91)
+
+
 def test_user_update_requires_a_change_and_a_long_new_password() -> None:
     assert UserUpdate(current_password="current", username="new-admin").has_changes() is True
     assert UserUpdate(current_password="current").has_changes() is False

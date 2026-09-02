@@ -44,6 +44,11 @@ class TagReadRepository:
                 existing.direction = event.direction
                 existing.zone = event.zone
                 existing.location = event.location
+                existing.gps_latitude = event.gps_latitude
+                existing.gps_longitude = event.gps_longitude
+                existing.gps_altitude = event.gps_altitude
+                existing.gps_accuracy = event.gps_accuracy
+                existing.gps_timestamp = event.gps_timestamp
                 existing.reader_timestamp = event.reader_timestamp
                 existing.raw_payload = event.raw_payload
                 existing.extra_data = event.extra_data
@@ -62,6 +67,11 @@ class TagReadRepository:
                     direction=event.direction,
                     zone=event.zone,
                     location=event.location,
+                    gps_latitude=event.gps_latitude,
+                    gps_longitude=event.gps_longitude,
+                    gps_altitude=event.gps_altitude,
+                    gps_accuracy=event.gps_accuracy,
+                    gps_timestamp=event.gps_timestamp,
                     reader_timestamp=event.reader_timestamp,
                     received_at=aggregated.last_seen_at,
                     first_seen_at=aggregated.first_seen_at,

@@ -18,6 +18,11 @@ class TagEvent:
     direction: str | None = None
     zone: str | None = None
     location: str | None = None
+    gps_latitude: float | None = None
+    gps_longitude: float | None = None
+    gps_altitude: float | None = None
+    gps_accuracy: float | None = None
+    gps_timestamp: datetime | None = None
     reader_timestamp: datetime | None = None
     raw_payload: str = ""
     extra_data: dict[str, Any] | None = None
@@ -46,7 +51,8 @@ def parse_simulator_event(payload: str, reader_ip: str) -> TagEvent:
         raise ValueError("Payload requires reader_id and hexadecimal epc_hex") from error
 
     known_fields = {
-        "reader_id", "epc_hex", "antenna", "rssi", "phase", "channel", "direction", "zone", "location"
+        "reader_id", "epc_hex", "antenna", "rssi", "phase", "channel", "direction", "zone", "location",
+        "gps_latitude", "gps_longitude", "gps_altitude", "gps_accuracy", "gps_timestamp"
     }
     return TagEvent(
         reader_id=reader_id,
@@ -59,6 +65,11 @@ def parse_simulator_event(payload: str, reader_ip: str) -> TagEvent:
         direction=str(data["direction"]) if data.get("direction") is not None else None,
         zone=str(data["zone"]) if data.get("zone") is not None else None,
         location=str(data["location"]) if data.get("location") is not None else None,
+        gps_latitude=float(data["gps_latitude"]) if data.get("gps_latitude") is not None else None,
+        gps_longitude=float(data["gps_longitude"]) if data.get("gps_longitude") is not None else None,
+        gps_altitude=float(data["gps_altitude"]) if data.get("gps_altitude") is not None else None,
+        gps_accuracy=float(data["gps_accuracy"]) if data.get("gps_accuracy") is not None else None,
+        gps_timestamp=datetime.fromisoformat(data["gps_timestamp"].replace("Z", "+00:00")) if data.get("gps_timestamp") is not None else None,
         raw_payload=payload,
         extra_data={key: value for key, value in data.items() if key not in known_fields} or None,
     )

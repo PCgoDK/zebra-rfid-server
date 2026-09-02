@@ -131,6 +131,11 @@ class TagReadCreate(BaseModel):
     direction: str | None = Field(default=None, max_length=64)
     zone: str | None = Field(default=None, max_length=255)
     location: str | None = Field(default=None, max_length=255)
+    gps_latitude: float | None = Field(default=None, ge=-90, le=90)
+    gps_longitude: float | None = Field(default=None, ge=-180, le=180)
+    gps_altitude: float | None = None
+    gps_accuracy: float | None = Field(default=None, ge=0)
+    gps_timestamp: datetime | None = None
     raw_payload: str = ""
 
     @field_validator("epc_hex")
@@ -153,6 +158,11 @@ class TagReadResponse(BaseModel):
     direction: str | None
     zone: str | None
     location: str | None
+    gps_latitude: float | None
+    gps_longitude: float | None
+    gps_altitude: float | None
+    gps_accuracy: float | None
+    gps_timestamp: datetime | None
     received_at: datetime
     seen_count: int
 
@@ -408,6 +418,11 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
             direction=payload.direction,
             zone=payload.zone,
             location=payload.location,
+            gps_latitude=payload.gps_latitude,
+            gps_longitude=payload.gps_longitude,
+            gps_altitude=payload.gps_altitude,
+            gps_accuracy=payload.gps_accuracy,
+            gps_timestamp=payload.gps_timestamp,
             raw_payload=payload.raw_payload,
         )
         session.add(tag_read)
