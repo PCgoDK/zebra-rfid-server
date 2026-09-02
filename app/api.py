@@ -102,6 +102,7 @@ class ReaderResponse(BaseModel):
     last_seen_at: datetime | None
     last_data_at: datetime | None
     last_error: str | None
+    tag_read_count: int = 0
 
 
 class ReaderDiscoveryRequest(BaseModel):
@@ -285,8 +286,19 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
         limit: int = Query(default=100, ge=1, le=500),
         session: Session = Depends(get_session),
         _: ApiUser = Depends(current_user),
-    ) -> list[Reader]:
-        return list(session.scalars(select(Reader).order_by(Reader.id).offset(offset).limit(limit)))
+    ) -> list[ReaderResponse]:
+        statement = (
+            select(Reader, func.count(TagRead.id).label("tag_read_count"))
+            .outerjoin(TagRead, TagRead.reader_id == Reader.id)
+            .group_by(Reader.id)
+            .order_by(Reader.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return [
+            ReaderResponse.model_validate(reader).model_copy(update={"tag_read_count": tag_read_count})
+            for reader, tag_read_count in session.execute(statement)
+        ]
 
     @app.get("/api/v1/readers/{reader_id}", response_model=ReaderResponse)
     def get_reader(

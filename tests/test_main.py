@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from datetime import datetime, timezone
 from pathlib import Path
 import pytest
 from starlette.requests import Request
@@ -11,7 +12,7 @@ from app.api import ReaderCreate, UserCreate, UserUpdate, create_api
 from app.auth import DUMMY_PASSWORD_HASH, decode_access_token, hash_password
 from app.config import Settings
 from app.database import Base
-from app.models import ApiUser
+from app.models import ApiUser, Reader, TagRead
 
 TEST_SECRET = "a-secure-test-secret-with-at-least-32-bytes"
 
@@ -105,6 +106,40 @@ def test_reader_creation_accepts_optional_identification_details() -> None:
         ReaderCreate(name="Dock 1", ip_address="192.168.1.20", mac_address="invalid")
 
 
+def test_reader_list_includes_received_tag_read_count() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    list_readers = get_route_endpoint(app, "/api/v1/readers")
+    now = datetime.now(timezone.utc)
+    with session_factory() as session:
+        reader = Reader(name="Dock 1", ip_address="192.168.1.20", status="receiving_data")
+        session.add(reader)
+        session.commit()
+        session.add(
+            TagRead(
+                id=1,
+                reader_id=reader.id,
+                reader_ip=reader.ip_address,
+                epc_hex="00AA",
+                epc_decimal="170",
+                epc_bit_length=16,
+                antenna=1,
+                rssi=-42,
+                received_at=now,
+                first_seen_at=now,
+                last_seen_at=now,
+                seen_count=1,
+                raw_payload="{}",
+                parse_status="valid",
+            )
+        )
+        session.commit()
+
+        readers = list_readers(offset=0, limit=100, session=session)
+
+    assert readers[0].tag_read_count == 1
+
+
 def test_user_update_requires_a_change_and_a_long_new_password() -> None:
     assert UserUpdate(current_password="current", username="new-admin").has_changes() is True
     assert UserUpdate(current_password="current").has_changes() is False
@@ -125,6 +160,14 @@ def test_portal_exposes_administrator_api_user_creation() -> None:
     assert "Opret API-bruger" in template
     assert 'id="api-password"' in template
     assert 'value="api_client"' in template
+
+
+def test_portal_escapes_dynamic_table_content() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+
+    assert "function escapeHtml(value)" in template
+    assert "${escapeHtml(user.username)}" in template
+    assert "${escapeHtml(reader.name)}" in template
 
 
 def test_user_creation_requires_a_valid_role_and_long_password() -> None:
