@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     llrp_reader_ids: str = ""
     log_level: str = "INFO"
     jwt_secret: str = ""
-    jwt_access_token_minutes: int = 30
+    jwt_access_token_minutes: int = 1440
     login_rate_limit_attempts: int = 5
     login_rate_limit_window_seconds: int = 60
     duplicate_window_ms: int = 1000

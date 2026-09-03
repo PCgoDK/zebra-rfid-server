@@ -39,6 +39,10 @@ def test_health_endpoint_reports_service_status() -> None:
     assert response == {"status": "ok"}
 
 
+def test_token_lifetime_defaults_to_24_hours() -> None:
+    assert Settings(jwt_secret=TEST_SECRET).jwt_access_token_minutes == 1440
+
+
 def test_dashboard_renders_login_and_reader_controls() -> None:
     app = create_api(Settings(jwt_secret=TEST_SECRET), create_test_session_factory())
     dashboard = get_route_endpoint(app, "/")
