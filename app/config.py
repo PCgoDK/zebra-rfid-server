@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     login_rate_limit_attempts: int = 5
     login_rate_limit_window_seconds: int = 60
     duplicate_window_ms: int = 1000
+    passage_window_seconds: int = Field(default=10, ge=1)
     initial_admin_username: str = "admin"
     initial_admin_password: str = ""
     data_dir: str = "/var/lib/zebra-rfid-server"

@@ -3,7 +3,7 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.epc import parse_epc
+from app.epc import decode_epc, epc_scheme_is_allowed, parse_epc
 from app.models import Reader, TagRead
 from app.rfid import AggregatedTagRead
 
@@ -13,13 +13,15 @@ class TagReadRepository:
         self.session_factory = session_factory
         self.duplicate_window = timedelta(milliseconds=duplicate_window_ms)
 
-    def save(self, aggregated: AggregatedTagRead) -> TagRead:
+    def save(self, aggregated: AggregatedTagRead) -> TagRead | None:
         event = aggregated.event
         epc = parse_epc(event.epc_hex)
         with self.session_factory() as session:
             reader = session.get(Reader, event.reader_id)
             if reader is None:
                 raise ValueError(f"Reader {event.reader_id} is not registered")
+            if not epc_scheme_is_allowed(epc.hex_value, reader.epc_schemes):
+                return None
 
             reader.last_seen_at = aggregated.last_seen_at
             reader.last_data_at = aggregated.last_seen_at
@@ -38,6 +40,7 @@ class TagReadRepository:
             if existing is not None:
                 existing.last_seen_at = aggregated.last_seen_at
                 existing.seen_count += 1
+                existing.epc_decoded = decode_epc(epc.hex_value)
                 existing.rssi = event.rssi
                 existing.phase = event.phase
                 existing.channel = event.channel
@@ -58,7 +61,7 @@ class TagReadRepository:
                     reader_id=event.reader_id,
                     reader_ip=event.reader_ip,
                     epc_hex=epc.hex_value,
-                    epc_decimal=epc.decimal_value,
+                    epc_decoded=decode_epc(epc.hex_value),
                     epc_bit_length=epc.bit_length,
                     antenna=event.antenna,
                     rssi=event.rssi,

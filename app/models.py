@@ -24,6 +24,7 @@ class Reader(TimestampMixin, Base):
     serial_number: Mapped[str | None] = mapped_column(String(100), unique=True)
     mac_address: Mapped[str | None] = mapped_column(String(17), unique=True)
     firmware_version: Mapped[str | None] = mapped_column(String(100))
+    epc_schemes: Mapped[list[str] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(32), default="unknown")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -36,7 +37,6 @@ class TagRead(TimestampMixin, Base):
     __tablename__ = "tag_reads"
     __table_args__ = (
         Index("ix_tag_reads_epc_hex", "epc_hex"),
-        Index("ix_tag_reads_epc_decimal", "epc_decimal"),
         Index("ix_tag_reads_reader_received", "reader_id", "received_at"),
     )
 
@@ -44,7 +44,7 @@ class TagRead(TimestampMixin, Base):
     reader_id: Mapped[int] = mapped_column(ForeignKey("readers.id"), index=True)
     reader_ip: Mapped[str] = mapped_column(String(45))
     epc_hex: Mapped[str] = mapped_column(String(128))
-    epc_decimal: Mapped[str] = mapped_column(String(128))
+    epc_decoded: Mapped[str | None] = mapped_column(String(255))
     epc_bit_length: Mapped[int] = mapped_column(Integer)
     antenna: Mapped[int | None] = mapped_column(Integer)
     rssi: Mapped[float | None] = mapped_column(Float)

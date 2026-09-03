@@ -1,9 +1,9 @@
 from fastapi import HTTPException
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
 from starlette.requests import Request
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -56,6 +56,8 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert 'id="swagger-frame"' in body
     assert 'src="/docs"' in body
     assert 'preauthorizeApiKey("HTTPBearer", token)' in body
+    assert "31D55CD1D800000001000000" in body
+    assert "31D55CD1D80000000A000000" in body
 
 
 def test_readme_describes_current_reader_event_contract() -> None:
@@ -175,6 +177,27 @@ def test_reader_creation_accepts_optional_identification_details() -> None:
         ReaderCreate(name="Dock 1", ip_address="192.168.1.20", mac_address="invalid")
 
 
+def test_tag_read_creation_rejects_an_epc_scheme_not_enabled_for_the_reader() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    create_tag_read = next(
+        route.endpoint
+        for route in app.routes
+        if route.path == "/api/v1/tag-reads" and "POST" in route.methods
+    )
+    with session_factory() as session:
+        reader = Reader(name="Dock 1", ip_address="192.168.1.20", epc_schemes=["SGTIN-96"])
+        session.add(reader)
+        session.commit()
+
+        with pytest.raises(HTTPException, match="EPC scheme is not enabled"):
+            create_tag_read(
+                TagReadCreate(reader_id=reader.id, epc_hex="31D55CD1D800000001000000"), session=session
+            )
+
+        assert list(session.scalars(select(TagRead))) == []
+
+
 def test_reader_list_includes_received_tag_read_count() -> None:
     session_factory = create_test_session_factory()
     app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
@@ -190,7 +213,6 @@ def test_reader_list_includes_received_tag_read_count() -> None:
                 reader_id=reader.id,
                 reader_ip=reader.ip_address,
                 epc_hex="00AA",
-                epc_decimal="170",
                 epc_bit_length=16,
                 antenna=1,
                 rssi=-42,
@@ -209,6 +231,147 @@ def test_reader_list_includes_received_tag_read_count() -> None:
     assert readers[0].tag_read_count == 1
 
 
+def test_reader_deletion_removes_its_tag_reads() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    delete_reader = next(
+        route.endpoint
+        for route in app.routes
+        if route.path == "/api/v1/readers/{reader_id}" and "DELETE" in route.methods
+    )
+    now = datetime.now(timezone.utc)
+    with session_factory() as session:
+        reader = Reader(name="Dock 1", ip_address="192.168.1.20")
+        session.add(reader)
+        session.commit()
+        session.add(
+            TagRead(
+                id=1,
+                reader_id=reader.id,
+                reader_ip=reader.ip_address,
+                epc_hex="00AA",
+                epc_bit_length=16,
+                antenna=1,
+                rssi=-42,
+                received_at=now,
+                first_seen_at=now,
+                last_seen_at=now,
+                seen_count=1,
+                raw_payload="{}",
+                parse_status="valid",
+            )
+        )
+        session.commit()
+
+        delete_reader(reader.id, session=session)
+
+        assert session.get(Reader, reader.id) is None
+        assert list(session.scalars(select(TagRead).where(TagRead.reader_id == reader.id))) == []
+
+
+def test_latest_reader_passage_counts_unique_tags_in_configured_window() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET, passage_window_seconds=10), session_factory)
+    passage = get_route_endpoint(app, "/api/v1/readers/{reader_id}/passage")
+    now = datetime.now(timezone.utc)
+    with session_factory() as session:
+        reader = Reader(name="Dock 1", ip_address="192.168.1.20")
+        session.add(reader)
+        session.commit()
+        for tag_read_id, epc_hex, seen_at in [
+            (1, "310000000000000000000000", now),
+            (2, "310000000000000000000000", now - timedelta(seconds=5)),
+            (3, "00112233445566778899AABB", now - timedelta(seconds=8)),
+            (4, "310000000000000000000002", now - timedelta(seconds=11)),
+        ]:
+            session.add(TagRead(id=tag_read_id, reader_id=reader.id, reader_ip=reader.ip_address, epc_hex=epc_hex, epc_bit_length=96, antenna=1, received_at=seen_at, first_seen_at=seen_at, last_seen_at=seen_at, seen_count=1, raw_payload="{}", parse_status="valid"))
+        session.commit()
+
+        result = passage(reader.id, session=session)
+
+    assert result == {"reader_id": reader.id, "window_seconds": 10, "total": 2, "sscc": ["0000"]}
+
+
+def test_latest_reader_passage_lists_requested_reader1_sscc96_tag() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET, passage_window_seconds=10), session_factory)
+    passage = get_route_endpoint(app, "/api/v1/readers/{reader_id}/passage")
+    epc_hex = "31D55CD1D800000001000000"
+    now = datetime.now(timezone.utc)
+    with session_factory() as session:
+        reader = Reader(name="Reader1", ip_address="127.0.0.1")
+        session.add(reader)
+        session.commit()
+        session.add(
+            TagRead(
+                id=1,
+                reader_id=reader.id,
+                reader_ip=reader.ip_address,
+                epc_hex=epc_hex,
+                epc_bit_length=96,
+                antenna=1,
+                received_at=now,
+                first_seen_at=now,
+                last_seen_at=now,
+                seen_count=1,
+                raw_payload="{}",
+                parse_status="valid",
+            )
+        )
+        session.commit()
+
+        result = passage(reader.id, session=session)
+
+    assert result == {
+        "reader_id": reader.id,
+        "window_seconds": 10,
+        "total": 1,
+        "sscc": ["000000001"],
+    }
+
+
+def test_latest_reader_passage_is_empty_when_latest_read_is_older_than_30_seconds() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET, passage_window_seconds=10), session_factory)
+    passage = get_route_endpoint(app, "/api/v1/readers/{reader_id}/passage")
+    seen_at = datetime.now(timezone.utc) - timedelta(seconds=31)
+    with session_factory() as session:
+        reader = Reader(name="Reader1", ip_address="127.0.0.1")
+        session.add(reader)
+        session.commit()
+        session.add(TagRead(id=1, reader_id=reader.id, reader_ip=reader.ip_address, epc_hex="31D55CD1D800000001000000", epc_bit_length=96, antenna=1, received_at=seen_at, first_seen_at=seen_at, last_seen_at=seen_at, seen_count=1, raw_payload="{}", parse_status="valid"))
+        session.commit()
+
+        result = passage(reader.id, session=session)
+
+    assert result == {"reader_id": reader.id, "window_seconds": 10, "total": 0, "sscc": []}
+
+
+def test_sscc_lookup_returns_latest_and_historical_registrations() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    latest = get_route_endpoint(app, "/api/v1/sscc/{serial}/latest")
+    history = get_route_endpoint(app, "/api/v1/sscc/{serial}/history")
+    now = datetime.now(timezone.utc)
+    with session_factory() as session:
+        reader = Reader(name="Reader1", ip_address="127.0.0.1")
+        session.add(reader)
+        session.commit()
+        for tag_read_id, epc_hex, seen_at in [
+            (1, "31D55CD1D800000001000000", now - timedelta(seconds=10)),
+            (2, "31D55CD1D800000001000000", now),
+            (3, "31D55CD1D80000000A000000", now),
+        ]:
+            session.add(TagRead(id=tag_read_id, reader_id=reader.id, reader_ip=reader.ip_address, epc_hex=epc_hex, epc_bit_length=96, antenna=1, received_at=seen_at, first_seen_at=seen_at, last_seen_at=seen_at, seen_count=1, raw_payload="{}", parse_status="valid"))
+        session.commit()
+
+        latest_result = latest("000001", session=session)
+        history_result = history("000001", offset=0, limit=100, session=session)
+
+    assert latest_result.id == 2
+    assert [tag_read.id for tag_read in history_result] == [2, 1]
+
+
 def test_tag_read_schemas_support_optional_st5500_fields() -> None:
     payload = TagReadCreate(
         reader_id=1,
@@ -222,7 +385,6 @@ def test_tag_read_schemas_support_optional_st5500_fields() -> None:
         reader_id=1,
         reader_ip="192.0.2.10",
         epc_hex="00AA",
-        epc_decimal="170",
         epc_bit_length=16,
         antenna=1,
         rssi=-42,
@@ -305,6 +467,10 @@ def test_required_reader_and_tag_read_routes_are_registered() -> None:
         ("/api/v1/readers", "POST"),
         ("/api/v1/readers/{reader_id}", "GET"),
         ("/api/v1/readers/{reader_id}", "PATCH"),
+        ("/api/v1/readers/{reader_id}", "DELETE"),
+        ("/api/v1/readers/{reader_id}/passage", "GET"),
+        ("/api/v1/sscc/{serial}/latest", "GET"),
+        ("/api/v1/sscc/{serial}/history", "GET"),
         ("/api/v1/readers/discover", "POST"),
         ("/api/v1/auth/me", "PATCH"),
         ("/api/v1/users", "POST"),

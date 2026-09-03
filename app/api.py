@@ -1,12 +1,12 @@
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -21,7 +21,7 @@ from app.auth import (
 from app.config import Settings
 from app.discovery import ReaderDiscovery, validate_reader_ip
 from app.models import ApiUser, Reader
-from app.epc import parse_epc
+from app.epc import EPC_SCHEMES, decode_epc, epc_scheme_is_allowed, parse_epc, sscc96_without_check_digit
 from app.models import TagRead
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -69,12 +69,20 @@ class ReaderCreate(BaseModel):
     serial_number: str | None = Field(default=None, max_length=100)
     mac_address: str | None = Field(default=None, pattern=r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
     firmware_version: str | None = Field(default=None, max_length=100)
+    epc_schemes: list[str] | None = None
     enabled: bool = True
 
     @field_validator("ip_address")
     @classmethod
     def validate_ip_address(cls, value: str) -> str:
         return validate_reader_ip(value)
+
+    @field_validator("epc_schemes")
+    @classmethod
+    def validate_epc_schemes(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and not set(value).issubset(EPC_SCHEMES):
+            raise ValueError("Unsupported EPC scheme")
+        return value
 
 
 class ReaderUpdate(BaseModel):
@@ -84,6 +92,14 @@ class ReaderUpdate(BaseModel):
     serial_number: str | None = Field(default=None, max_length=100)
     mac_address: str | None = Field(default=None, pattern=r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
     firmware_version: str | None = Field(default=None, max_length=100)
+    epc_schemes: list[str] | None = None
+
+    @field_validator("epc_schemes")
+    @classmethod
+    def validate_epc_schemes(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and not set(value).issubset(EPC_SCHEMES):
+            raise ValueError("Unsupported EPC scheme")
+        return value
 
 
 class ReaderResponse(BaseModel):
@@ -96,6 +112,7 @@ class ReaderResponse(BaseModel):
     serial_number: str | None
     mac_address: str | None
     firmware_version: str | None
+    epc_schemes: list[str] | None
     status: str
     enabled: bool
     first_seen_at: datetime | None
@@ -151,7 +168,7 @@ class TagReadResponse(BaseModel):
     reader_id: int
     reader_ip: str
     epc_hex: str
-    epc_decimal: str
+    epc_decoded: str | None
     epc_bit_length: int
     antenna: int | None
     rssi: float | None
@@ -336,6 +353,7 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
             serial_number=payload.serial_number,
             mac_address=payload.mac_address,
             firmware_version=payload.firmware_version,
+            epc_schemes=payload.epc_schemes,
             enabled=payload.enabled,
         )
         session.add(reader)
@@ -363,6 +381,17 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
         session.refresh(reader)
         return reader
 
+    @app.delete("/api/v1/readers/{reader_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_reader(
+        reader_id: int, session: Session = Depends(get_session), _: ApiUser = Depends(administrator)
+    ) -> None:
+        reader = session.get(Reader, reader_id)
+        if reader is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reader not found")
+        session.execute(delete(TagRead).where(TagRead.reader_id == reader_id))
+        session.delete(reader)
+        session.commit()
+
     @app.post("/api/v1/readers/discover", response_model=list[ReaderDiscoveryResponse])
     async def discover_readers(
         payload: ReaderDiscoveryRequest, _: ApiUser = Depends(administrator)
@@ -372,7 +401,6 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
     @app.get("/api/v1/tag-reads", response_model=list[TagReadResponse])
     def list_tag_reads(
         epc_hex: str | None = None,
-        epc_decimal: str | None = None,
         reader_id: int | None = Query(default=None, gt=0),
         antenna: int | None = Query(default=None, ge=0),
         received_after: datetime | None = None,
@@ -387,8 +415,6 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
         statement = select(TagRead).order_by(TagRead.received_at.desc())
         if epc_hex is not None:
             statement = statement.where(TagRead.epc_hex == parse_epc(epc_hex).hex_value)
-        if epc_decimal is not None:
-            statement = statement.where(TagRead.epc_decimal == epc_decimal)
         if reader_id is not None:
             statement = statement.where(TagRead.reader_id == reader_id)
         if antenna is not None:
@@ -406,12 +432,14 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
         reader = session.get(Reader, payload.reader_id)
         if reader is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reader not found")
+        if not epc_scheme_is_allowed(payload.epc_hex, reader.epc_schemes):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="EPC scheme is not enabled")
         epc = parse_epc(payload.epc_hex)
         tag_read = TagRead(
             reader_id=reader.id,
             reader_ip=reader.ip_address,
             epc_hex=epc.hex_value,
-            epc_decimal=epc.decimal_value,
+            epc_decoded=decode_epc(epc.hex_value),
             epc_bit_length=epc.bit_length,
             antenna=payload.antenna,
             rssi=payload.rssi,
@@ -436,6 +464,66 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
         if tag_read is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No tag reads found")
         return tag_read
+
+    @app.get("/api/v1/readers/{reader_id}/passage")
+    def latest_reader_passage(
+        reader_id: int, session: Session = Depends(get_session), _: ApiUser = Depends(current_user)
+    ) -> dict[str, object]:
+        reader = session.get(Reader, reader_id)
+        if reader is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reader not found")
+        latest = session.scalar(
+            select(TagRead)
+            .where(TagRead.reader_id == reader_id)
+            .order_by(TagRead.last_seen_at.desc())
+            .limit(1)
+        )
+        if latest is None:
+            return {"reader_id": reader_id, "window_seconds": settings.passage_window_seconds, "total": 0, "sscc": []}
+        latest_seen_at = latest.last_seen_at
+        if latest_seen_at.tzinfo is None:
+            latest_seen_at = latest_seen_at.replace(tzinfo=timezone.utc)
+        if latest_seen_at < datetime.now(timezone.utc) - timedelta(seconds=30):
+            return {"reader_id": reader_id, "window_seconds": settings.passage_window_seconds, "total": 0, "sscc": []}
+        window_start = latest_seen_at - timedelta(seconds=settings.passage_window_seconds)
+        reads = session.scalars(
+            select(TagRead)
+            .where(TagRead.reader_id == reader_id, TagRead.last_seen_at >= window_start)
+            .order_by(TagRead.last_seen_at.desc())
+        )
+        epcs = {tag_read.epc_hex for tag_read in reads}
+        return {
+            "reader_id": reader_id,
+            "window_seconds": settings.passage_window_seconds,
+            "total": len(epcs),
+            "sscc": sorted(filter(None, (sscc96_without_check_digit(epc) for epc in epcs))),
+        }
+
+    def sscc_tag_reads(session: Session, serial: str) -> list[TagRead]:
+        return [
+            tag_read
+            for tag_read in session.scalars(select(TagRead).order_by(TagRead.received_at.desc()))
+            if (sscc_serial := sscc96_without_check_digit(tag_read.epc_hex)) and sscc_serial.endswith(serial)
+        ]
+
+    @app.get("/api/v1/sscc/{serial}/latest", response_model=TagReadResponse)
+    def latest_sscc_tag_read(
+        serial: str, session: Session = Depends(get_session), _: ApiUser = Depends(current_user)
+    ) -> TagRead:
+        tag_reads = sscc_tag_reads(session, serial)
+        if not tag_reads:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No SSCC registration found")
+        return tag_reads[0]
+
+    @app.get("/api/v1/sscc/{serial}/history", response_model=list[TagReadResponse])
+    def sscc_tag_read_history(
+        serial: str,
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=100, ge=1, le=500),
+        session: Session = Depends(get_session),
+        _: ApiUser = Depends(current_user),
+    ) -> list[TagRead]:
+        return sscc_tag_reads(session, serial)[offset : offset + limit]
 
     @app.get("/api/v1/tag-reads/{tag_read_id}", response_model=TagReadResponse)
     def get_tag_read(
