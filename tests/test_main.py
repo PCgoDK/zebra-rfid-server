@@ -64,6 +64,23 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert "31D55CD1D80000000A000000" in body
 
 
+def test_public_reader_page_and_passage_data_require_no_login() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    page = get_route_endpoint(app, "/{reader_name}")
+    passage = get_route_endpoint(app, "/public/readers/{reader_id}/passage")
+    with session_factory() as session:
+        reader = Reader(name="Port 1", ip_address="192.168.1.20")
+        session.add(reader)
+        session.commit()
+
+        response = page(reader.name, Request({"type": "http", "method": "GET", "path": "/Port%201", "headers": []}), session)
+        result = passage(reader.id, session)
+
+    assert "Port 1" in response.body.decode()
+    assert result["total"] == 0
+
+
 def test_readme_describes_current_reader_event_contract() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
@@ -250,9 +267,9 @@ def test_reader_deletion_removes_its_tag_reads() -> None:
         session.commit()
         session.add(
             TagRead(
-                id=1,
-                reader_id=reader.id,
-                reader_ip=reader.ip_address,
+            id=1,
+            reader_id=reader.id,
+            reader_ip=reader.ip_address,
                 epc_hex="00AA",
                 epc_bit_length=16,
                 antenna=1,

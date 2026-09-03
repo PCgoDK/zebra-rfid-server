@@ -28,6 +28,14 @@ Statussiden findes derefter paa `http://localhost:8080`, og health check er
 `http://localhost:8080/api/v1/health`. Brug `API_PORT=8088` i `.env` hvis port
 8088 oenskes.
 
+## Offentlig læservisning
+
+Hver oprettet læser har en offentlig passagetællerside på
+`http://server-ip:8080/{læsernavn}`. Eksempelvis åbnes læseren `Port1` på
+`http://server-ip:8080/Port1`. Siden kræver ikke login og viser kun læsernavn,
+antal unikke tags og SSCC-løbenumre. Data opdateres automatisk hvert 30.
+sekund. Læsernavne med mellemrum skal URL-enkodes, eksempelvis `Port%201`.
+
 Send fragmenterede testevents fra to simulerede laesere:
 
 ```bash

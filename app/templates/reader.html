@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ reader.name }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { min-height: 100vh; }
+    main { min-height: 100vh; }
+    #total { font-size: clamp(10rem, 42vh, 28rem); line-height: 1; }
+    #sscc td, #sscc th { text-align: center; }
+  </style>
+</head>
+<body class="bg-light">
+  <main class="container-fluid p-4">
+    <div class="row g-4 min-vh-100">
+      <section class="col-lg-7 d-flex flex-column align-items-center justify-content-center text-center">
+        <h1 class="h3">{{ reader.name }}</h1>
+        <div class="small text-secondary">Unikke tags</div>
+        <div id="total">0</div>
+        <div id="window" class="small text-secondary"></div>
+      </section>
+      <section class="col-lg-5"><div class="bg-white border h-100"><div class="table-responsive h-100"><table class="table mb-0"><thead><tr><th>SSCC løbenummer</th></tr></thead><tbody id="sscc"><tr><td class="text-secondary">Ingen SSCC-96 tags.</td></tr></tbody></table></div></div></section>
+    </div>
+  </main>
+  <script>
+    const readerId = {{ reader.id }};
+    async function refresh() { const response = await fetch(`/public/readers/${readerId}/passage`); if (!response.ok) return; const passage = await response.json(), body = document.querySelector("#sscc"); document.querySelector("#total").textContent = passage.total; document.querySelector("#window").textContent = `Seneste ${passage.window_seconds} sekunder`; body.replaceChildren(); passage.sscc.forEach(serial => { const row = document.createElement("tr"), cell = document.createElement("td"); cell.textContent = serial; row.append(cell); body.append(row); }); if (!body.children.length) body.innerHTML = '<tr><td class="text-secondary">Ingen SSCC-96 tags.</td></tr>'; }
+    refresh(); window.setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

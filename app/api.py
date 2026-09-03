@@ -218,6 +218,38 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
         return user
 
+    def reader_passage(reader_id: int, session: Session) -> dict[str, object]:
+        reader = session.get(Reader, reader_id)
+        if reader is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reader not found")
+        latest = session.scalar(
+            select(TagRead)
+            .where(TagRead.reader_id == reader_id)
+            .order_by(TagRead.last_seen_at.desc())
+            .limit(1)
+        )
+        empty_passage = {"reader_id": reader_id, "window_seconds": settings.passage_window_seconds, "total": 0, "sscc": []}
+        if latest is None:
+            return empty_passage
+        latest_seen_at = latest.last_seen_at
+        if latest_seen_at.tzinfo is None:
+            latest_seen_at = latest_seen_at.replace(tzinfo=timezone.utc)
+        if latest_seen_at < datetime.now(timezone.utc) - timedelta(seconds=30):
+            return empty_passage
+        window_start = latest_seen_at - timedelta(seconds=settings.passage_window_seconds)
+        reads = session.scalars(
+            select(TagRead)
+            .where(TagRead.reader_id == reader_id, TagRead.last_seen_at >= window_start)
+            .order_by(TagRead.last_seen_at.desc())
+        )
+        epcs = {tag_read.epc_hex for tag_read in reads}
+        return {
+            "reader_id": reader_id,
+            "window_seconds": settings.passage_window_seconds,
+            "total": len(epcs),
+            "sscc": sorted(filter(None, (sscc96_without_check_digit(epc) for epc in epcs))),
+        }
+
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -225,6 +257,17 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def dashboard(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "dashboard.html")
+
+    @app.get("/{reader_name}", response_class=HTMLResponse, include_in_schema=False)
+    def public_reader_page(reader_name: str, request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+        reader = session.scalar(select(Reader).where(Reader.name == reader_name))
+        if reader is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reader not found")
+        return templates.TemplateResponse(request, "reader.html", {"reader": reader})
+
+    @app.get("/public/readers/{reader_id}/passage", include_in_schema=False)
+    def public_reader_passage(reader_id: int, session: Session = Depends(get_session)) -> dict[str, object]:
+        return reader_passage(reader_id, session)
 
     @app.post("/api/v1/auth/login", response_model=TokenResponse)
     def login(payload: LoginRequest, request: Request, session: Session = Depends(get_session)) -> TokenResponse:
@@ -469,35 +512,7 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
     def latest_reader_passage(
         reader_id: int, session: Session = Depends(get_session), _: ApiUser = Depends(current_user)
     ) -> dict[str, object]:
-        reader = session.get(Reader, reader_id)
-        if reader is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reader not found")
-        latest = session.scalar(
-            select(TagRead)
-            .where(TagRead.reader_id == reader_id)
-            .order_by(TagRead.last_seen_at.desc())
-            .limit(1)
-        )
-        if latest is None:
-            return {"reader_id": reader_id, "window_seconds": settings.passage_window_seconds, "total": 0, "sscc": []}
-        latest_seen_at = latest.last_seen_at
-        if latest_seen_at.tzinfo is None:
-            latest_seen_at = latest_seen_at.replace(tzinfo=timezone.utc)
-        if latest_seen_at < datetime.now(timezone.utc) - timedelta(seconds=30):
-            return {"reader_id": reader_id, "window_seconds": settings.passage_window_seconds, "total": 0, "sscc": []}
-        window_start = latest_seen_at - timedelta(seconds=settings.passage_window_seconds)
-        reads = session.scalars(
-            select(TagRead)
-            .where(TagRead.reader_id == reader_id, TagRead.last_seen_at >= window_start)
-            .order_by(TagRead.last_seen_at.desc())
-        )
-        epcs = {tag_read.epc_hex for tag_read in reads}
-        return {
-            "reader_id": reader_id,
-            "window_seconds": settings.passage_window_seconds,
-            "total": len(epcs),
-            "sscc": sorted(filter(None, (sscc96_without_check_digit(epc) for epc in epcs))),
-        }
+        return reader_passage(reader_id, session)
 
     def sscc_tag_reads(session: Session, serial: str) -> list[TagRead]:
         return [
