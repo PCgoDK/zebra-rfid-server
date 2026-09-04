@@ -33,9 +33,10 @@ if [[ -n "$requested_admin_password" && ${#requested_admin_password} -lt 12 ]]; 
 fi
 
 apt-get update
-apt-get install -y python3-venv python3-pip postgresql ufw
+apt-get install -y caddy python3-venv python3-pip postgresql ufw
 ufw allow 8080/tcp comment 'Zebra RFID Server API'
 ufw allow 5084/tcp comment 'Zebra RFID reader input'
+ufw allow 443/tcp comment 'Zebra RFID Server HTTPS'
 id "$service_user" &>/dev/null || useradd --system --home-dir "$data_dir" --create-home --shell /usr/sbin/nologin "$service_user"
 install -d -o "$service_user" -g "$service_user" "$app_dir" "$data_dir" "$log_dir"
 install -d -o "$service_user" -g "$service_user" "$app_dir/app"
@@ -112,6 +113,16 @@ with create_session_factory(settings)() as session:
     session.commit()
 '
 install -m 0644 "$source_dir/systemd/zebra-rfid-server.service" /etc/systemd/system/zebra-rfid-server.service
+server_ip=$(ip -4 route get 1.1.1.1 | awk '/src/ {for (field = 1; field <= NF; field++) if ($field == "src") {print $(field + 1); exit}}')
+[[ -n "$server_ip" ]] || { echo "Could not determine primary IPv4 address for HTTPS"; exit 1; }
+sed "s/__SERVER_IP__/$server_ip/" "$source_dir/deploy/Caddyfile" > /etc/caddy/Caddyfile
+caddy fmt --overwrite /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile
 systemctl daemon-reload
 systemctl enable zebra-rfid-server.service
 systemctl restart zebra-rfid-server.service
+systemctl enable caddy.service
+systemctl restart caddy.service
+install -m 0644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt "$data_dir/caddy-root.crt"
+chown "$service_user":"$service_user" "$data_dir/caddy-root.crt"
+printf 'Internal HTTPS: https://%s\nAndroid CA certificate: %s/caddy-root.crt\n' "$server_ip" "$data_dir"

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SSCC opslag</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { min-height: 100vh; }
+    main { max-width: 42rem; }
+    #camera { width: 100%; max-height: 22rem; object-fit: cover; background: #111; }
+  </style>
+</head>
+<body class="bg-light">
+  <main class="container py-4">
+    <h1 class="h3 mb-4">SSCC opslag</h1>
+    <form id="lookup-form" class="mb-3"><label class="form-label" for="serial">SSCC løbenummer</label><div class="input-group"><input id="serial" class="form-control" inputmode="numeric" autocomplete="off" required><button class="btn btn-primary" type="submit">Søg</button></div></form>
+    <button id="scan" class="btn btn-outline-secondary mb-3" type="button">Scan stregkode</button>
+    <video id="camera" class="d-none mb-3" playsinline></video>
+    <p id="message" class="text-secondary">Indtast eller scan et SSCC løbenummer.</p>
+    <section id="result" class="bg-white border p-3 d-none"><div class="small text-secondary">Seneste registrering</div><div id="reader-name" class="h4 mb-2"></div><time id="received-at" class="text-secondary"></time></section>
+  </main>
+  <script>
+    const form = document.querySelector("#lookup-form"), input = document.querySelector("#serial"), message = document.querySelector("#message"), result = document.querySelector("#result"), video = document.querySelector("#camera");
+    let stream, scanner;
+    function lookupValue(value) { const digits = value.replace(/[^0-9]/g, ""); return digits.length === 20 && digits.startsWith("00") ? digits.slice(2) : digits; }
+    async function lookup(value) { const serial = lookupValue(value); if (!serial) return; message.className = "text-secondary"; message.textContent = "Søger..."; result.classList.add("d-none"); const response = await fetch(`/public/sscc/${encodeURIComponent(serial)}/latest`); if (response.status === 404) { message.className = "text-danger"; message.textContent = "Ingen registrering fundet."; return; } if (!response.ok) { message.className = "text-danger"; message.textContent = "Opslaget kunne ikke gennemføres."; return; } const registration = await response.json(); document.querySelector("#reader-name").textContent = registration.reader_name; document.querySelector("#received-at").textContent = new Date(registration.received_at).toLocaleString("da-DK"); message.className = "text-success"; message.textContent = "Fundet."; result.classList.remove("d-none"); }
+    function stopCamera() { stream?.getTracks().forEach(track => track.stop()); stream = undefined; scanner = undefined; video.classList.add("d-none"); }
+    async function scanFrame() { if (!scanner || !video.videoWidth) return; const codes = await scanner.detect(video); if (codes.length) { input.value = codes[0].rawValue; stopCamera(); lookup(input.value); } }
+    form.addEventListener("submit", event => { event.preventDefault(); lookup(input.value); });
+    document.querySelector("#scan").addEventListener("click", async () => { if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) { message.className = "text-danger"; message.textContent = "Kamerascanning understøttes ikke i denne browser."; return; } try { stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}}); video.srcObject = stream; await video.play(); video.classList.remove("d-none"); scanner = new BarcodeDetector({formats:["code_128", "ean_13", "ean_8"]}); window.setInterval(scanFrame, 500); } catch { stopCamera(); message.className = "text-danger"; message.textContent = "Kameraet kunne ikke åbnes."; } });
+  </script>
+</body>
+</html>

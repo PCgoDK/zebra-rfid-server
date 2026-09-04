@@ -55,6 +55,12 @@ def test_dashboard_renders_login_and_reader_controls() -> None:
     assert "FXR90" in body
     assert "ST5500" in body
     assert 'id="home"' in body
+    assert 'id="registrations"' in body
+    assert 'id="registrations-panel"' in body
+    assert 'id="registration-sscc"' in body
+    assert 'id="registrations-body"' in body
+    assert 'id="registrations-table"' in body
+    assert "<th>Aflæst</th>" in body
     assert 'id="swagger"' in body
     assert 'id="swagger-panel"' in body
     assert 'id="swagger-frame"' in body
@@ -79,6 +85,26 @@ def test_public_reader_page_and_passage_data_require_no_login() -> None:
 
     assert "Port 1" in response.body.decode()
     assert result["total"] == 0
+
+
+def test_public_sscc_lookup_returns_reader_name_and_latest_registration_without_login() -> None:
+    session_factory = create_test_session_factory()
+    app = create_api(Settings(jwt_secret=TEST_SECRET), session_factory)
+    lookup_page = get_route_endpoint(app, "/lookup")
+    latest = get_route_endpoint(app, "/public/sscc/{serial}/latest")
+    seen_at = datetime.now(timezone.utc)
+    with session_factory() as session:
+        reader = Reader(name="Port 1", ip_address="192.168.1.20")
+        session.add(reader)
+        session.commit()
+        session.add(TagRead(id=1, reader_id=reader.id, reader_ip=reader.ip_address, epc_hex="31D55CD1D80000000A000000", epc_decoded="SSCC-96: 057150620000000107", epc_bit_length=96, antenna=1, received_at=seen_at, first_seen_at=seen_at, last_seen_at=seen_at, seen_count=1, raw_payload="{}", parse_status="valid"))
+        session.commit()
+
+        page = lookup_page(Request({"type": "http", "method": "GET", "path": "/lookup", "headers": []}))
+        registration = latest("057150620000000107", session=session)
+
+    assert "Scan stregkode" in page.body.decode()
+    assert registration == {"reader_name": "Port 1", "received_at": seen_at.isoformat()}
 
 
 def test_readme_describes_current_reader_event_contract() -> None:

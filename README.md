@@ -28,6 +28,24 @@ Statussiden findes derefter paa `http://localhost:8080`, og health check er
 `http://localhost:8080/api/v1/health`. Brug `API_PORT=8088` i `.env` hvis port
 8088 oenskes.
 
+## Registreringer
+
+Efter login viser knappen `Registreringer` de seneste 100 tag-registreringer
+med alle tilgængelige datafelter. Søgning på SSCC-løbenummer finder både hele
+og delvise løbenumre. Kolonnerne starter med bredde efter indholdet; ved behov
+kan tabellen scrolles vandret. Kolonnebredden kan justeres ved at trække i
+højre kant af kolonneoverskriften og gemmes lokalt i browseren.
+
+## Intern HTTPS
+
+Installationen konfigurerer automatisk Caddy som HTTPS-proxy på serverens
+primære LAN-IP. Brug derfor eksempelvis `https://192.168.1.151/lookup` uden
+portnummer. Caddys interne CA-rodcertifikat er gyldigt i cirka 10 år og kopieres
+til `/var/lib/zebra-rfid-server/caddy-root.crt`. Installer dette certifikat som
+betroet CA-certifikat på Android-enheder, før kamera-scanning bruges. Caddy
+fornyer automatisk de korterevarende servercertifikater; rodcertifikatet skal
+derfor normalt kun installeres én gang på hver enhed.
+
 ## Offentlig læservisning
 
 Hver oprettet læser har en offentlig passagetællerside på
@@ -35,6 +53,13 @@ Hver oprettet læser har en offentlig passagetællerside på
 `http://server-ip:8080/Port1`. Siden kræver ikke login og viser kun læsernavn,
 antal unikke tags og SSCC-løbenumre. Data opdateres automatisk hvert 30.
 sekund. Læsernavne med mellemrum skal URL-enkodes, eksempelvis `Port%201`.
+
+## Offentligt SSCC-opslag
+
+`http://server-ip:8080/lookup` er en loginfri, mobilvenlig side til opslag på
+SSCC-løbenummer. Den viser læsernavn og tidspunktet for seneste registrering.
+På understøttede mobilbrowsere kan kameraet åbnes for scanning af stregkoder;
+manuelt indtastet løbenummer, delvist løbenummer og fuld SSCC accepteres.
 
 Send fragmenterede testevents fra to simulerede laesere:
 

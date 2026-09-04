@@ -258,6 +258,10 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
     def dashboard(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "dashboard.html")
 
+    @app.get("/lookup", response_class=HTMLResponse, include_in_schema=False)
+    def public_sscc_lookup_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "lookup.html")
+
     @app.get("/{reader_name}", response_class=HTMLResponse, include_in_schema=False)
     def public_reader_page(reader_name: str, request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
         reader = session.scalar(select(Reader).where(Reader.name == reader_name))
@@ -518,8 +522,24 @@ def create_api(settings: Settings, session_factory: sessionmaker[Session]) -> Fa
         return [
             tag_read
             for tag_read in session.scalars(select(TagRead).order_by(TagRead.received_at.desc()))
-            if (sscc_serial := sscc96_without_check_digit(tag_read.epc_hex)) and sscc_serial.endswith(serial)
+            if (sscc_serial := sscc96_without_check_digit(tag_read.epc_hex))
+            and (sscc_serial.endswith(serial) or decode_epc(tag_read.epc_hex) == f"SSCC-96: {serial}")
         ]
+
+    @app.get("/public/sscc/{serial}/latest", include_in_schema=False)
+    def public_latest_sscc_tag_read(serial: str, session: Session = Depends(get_session)) -> dict[str, str]:
+        tag_reads = sscc_tag_reads(session, serial)
+        if not tag_reads:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No SSCC registration found")
+        tag_read = tag_reads[0]
+        reader = session.get(Reader, tag_read.reader_id)
+        received_at = tag_read.received_at
+        if received_at.tzinfo is None:
+            received_at = received_at.replace(tzinfo=timezone.utc)
+        return {
+            "reader_name": reader.name if reader else "Ukendt læser",
+            "received_at": received_at.isoformat(),
+        }
 
     @app.get("/api/v1/sscc/{serial}/latest", response_model=TagReadResponse)
     def latest_sscc_tag_read(
